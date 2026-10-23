@@ -13,16 +13,17 @@ import httpx
 from mcp import Client
 from mcp.server import MCPServer
 from pydantic import SecretStr
+from support import create_service_server
 from yamcps import ConnectorSecrets, SecretError
-from yamcps.server import create_server
 from yamcps.vault import Vault
-from yamcps_sonarr import SonarrConnector
-from yamcps_sonarr.client import SonarrClient, SonarrError, validate_url
-from yamcps_sonarr.service import SonarrService
+
+from yamcps_arr.sonarr import SonarrConnector
+from yamcps_arr.sonarr.client import SonarrClient, SonarrError, validate_url
+from yamcps_arr.sonarr.service import SonarrService
 
 _KEY = "sentinel-sonarr-key-93217"
 _URL = "https://sonarr.example.test/tv"
-_VALUES = {"YAMCPS_SONARR_URL": _URL, "YAMCPS_SONARR_API_KEY": _KEY}
+_VALUES = {"YAMCPS_ARR_SONARR_URL": _URL, "YAMCPS_ARR_SONARR_API_KEY": _KEY}
 _SERIES = {
     "id": 42,
     "tvdbId": 77,
@@ -163,7 +164,7 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.client = SonarrClient(
             _URL, SecretStr(_KEY), transport=httpx.MockTransport(self.respond)
         )
-        self.service = SonarrService(self.client, ConnectorSecrets("sonarr", _VALUES).redact)
+        self.service = SonarrService(self.client, ConnectorSecrets("arr", _VALUES).redact)
 
     def respond(self, request):
         self.requests.append(request)
@@ -290,8 +291,8 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(_KEY, repr(result))
 
     async def test_mcp_schema_annotations_skill_and_validation(self):
-        with patch("yamcps_sonarr.SonarrClient", return_value=self.client):
-            server = create_server(["sonarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.sonarr.SonarrClient", return_value=self.client):
+            server = create_service_server(SonarrConnector, ["sonarr"], secret_values=_VALUES)
         self.assertEqual(self.requests, [])
         async with Client(server) as client:
             tools = (await client.list_tools()).tools
@@ -301,17 +302,21 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     tool.annotations.read_only_hint,
                     tool.name
-                    not in {"sonarr_add_series", "sonarr_search_series", "sonarr_search_episodes"},
+                    not in {
+                        "arr_sonarr_add_series",
+                        "arr_sonarr_search_series",
+                        "arr_sonarr_search_episodes",
+                    },
                 )
-            skill = await client.read_resource("skill://sonarr-manage/SKILL.md")
-            self.assertIn("sonarr_add_series", skill.contents[0].text)
-            result = await client.call_tool("sonarr_system_status", {})
+            skill = await client.read_resource("skill://arr-sonarr-manage/SKILL.md")
+            self.assertIn("arr_sonarr_add_series", skill.contents[0].text)
+            result = await client.call_tool("arr_sonarr_system_status", {})
             self.assertEqual(result.structured_content, {"version": "4.0.0"})
             count = len(self.requests)
             for name, args in [
-                ("sonarr_get_series", {"series_id": 0}),
-                ("sonarr_queue", {"page_size": 101}),
-                ("sonarr_search_episodes", {"episode_ids": []}),
+                ("arr_sonarr_get_series", {"series_id": 0}),
+                ("arr_sonarr_queue", {"page_size": 101}),
+                ("arr_sonarr_search_episodes", {"episode_ids": []}),
             ]:
                 with self.subTest(name=name):
                     self.assertTrue((await client.call_tool(name, args)).is_error)
@@ -324,22 +329,24 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 Path(directory) / "keys/master.yamcps-key",
             )
             with (
-                patch("yamcps_sonarr.SonarrClient", return_value=self.client),
+                patch("yamcps_arr.sonarr.SonarrClient", return_value=self.client),
                 patch("sys.stdin.isatty", return_value=True),
                 patch("yamcps.onboarding.getpass.getpass", side_effect=[_URL, _KEY]) as prompt,
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                server = create_server(["sonarr"], vault=vault, interactive=True)
+                server = create_service_server(
+                    SonarrConnector, ["sonarr"], vault=vault, interactive=True
+                )
             self.assertEqual(prompt.call_count, 2)
             self.assertEqual(self.requests, [])
             with (
-                patch("yamcps_sonarr.SonarrClient", return_value=self.client),
+                patch("yamcps_arr.sonarr.SonarrClient", return_value=self.client),
                 patch("yamcps.onboarding.getpass.getpass") as prompt,
             ):
-                create_server(["sonarr"], vault=vault)
+                create_service_server(SonarrConnector, ["sonarr"], vault=vault)
             prompt.assert_not_called()
             async with Client(server) as client:
-                self.assertFalse((await client.call_tool("sonarr_system_status", {})).is_error)
+                self.assertFalse((await client.call_tool("arr_sonarr_system_status", {})).is_error)
 
     async def test_nested_metadata_redaction(self):
         self.candidates = [{**_SERIES, "overview": [{_KEY: _KEY}]}]
@@ -348,15 +355,16 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0]["overview"], [{"[REDACTED]": "[REDACTED]"}])
 
     async def test_mcp_add_and_search_wire_contract(self):
-        with patch("yamcps_sonarr.SonarrClient", return_value=self.client):
-            server = create_server(["sonarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.sonarr.SonarrClient", return_value=self.client):
+            server = create_service_server(SonarrConnector, ["sonarr"], secret_values=_VALUES)
         async with Client(server) as client:
             result = await client.call_tool(
-                "sonarr_add_series", {"tvdb_id": 77, "quality_profile_id": 2, "root_folder_id": 3}
+                "arr_sonarr_add_series",
+                {"tvdb_id": 77, "quality_profile_id": 2, "root_folder_id": 3},
             )
             self.assertFalse(result.is_error)
             self.assertEqual(result.structured_content["id"], 55)
-            result = await client.call_tool("sonarr_search_series", {"series_id": 42})
+            result = await client.call_tool("arr_sonarr_search_series", {"series_id": 42})
             self.assertFalse(result.is_error)
             self.assertEqual(result.structured_content["status"], "queued")
 
@@ -366,21 +374,23 @@ class SonarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
             SecretStr(_KEY),
             transport=httpx.MockTransport(lambda request: httpx.Response(401, text=_KEY)),
         )
-        with patch("yamcps_sonarr.SonarrClient", return_value=failing):
-            server = create_server(["sonarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.sonarr.SonarrClient", return_value=failing):
+            server = create_service_server(SonarrConnector, ["sonarr"], secret_values=_VALUES)
         async with Client(server) as client:
-            result = await client.call_tool("sonarr_system_status", {})
+            result = await client.call_tool("arr_sonarr_system_status", {})
         self.assertTrue(result.is_error)
         self.assertIn("authentication failed", repr(result))
         self.assertNotIn(_KEY, repr(result))
 
     def test_registration_requires_configuration(self):
         plugin = SonarrConnector()
-        self.assertEqual([spec.name for spec in plugin.required_secrets()], ["url", "api-key"])
+        self.assertEqual(
+            [spec.name for spec in plugin.required_secrets()], ["sonarr-url", "sonarr-api-key"]
+        )
         with self.assertRaises(SecretError):
             plugin.register(MCPServer("test"))
         with self.assertRaises(SecretError):
-            plugin.configure(ConnectorSecrets("sonarr", {}))
+            plugin.configure(ConnectorSecrets("arr", {}))
 
 
 if __name__ == "__main__":

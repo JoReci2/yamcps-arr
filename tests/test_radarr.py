@@ -13,16 +13,17 @@ import httpx
 from mcp import Client
 from mcp.server import MCPServer
 from pydantic import SecretStr
+from support import create_service_server
 from yamcps import ConnectorSecrets, SecretError
-from yamcps.server import create_server
 from yamcps.vault import Vault
-from yamcps_radarr import RadarrConnector
-from yamcps_radarr.client import RadarrClient, RadarrError, validate_url
-from yamcps_radarr.service import RadarrService
+
+from yamcps_arr.radarr import RadarrConnector
+from yamcps_arr.radarr.client import RadarrClient, RadarrError, validate_url
+from yamcps_arr.radarr.service import RadarrService
 
 _KEY = "sentinel-radarr-key-93217"
 _URL = "https://radarr.example.test/cinema"
-_VALUES = {"YAMCPS_RADARR_URL": _URL, "YAMCPS_RADARR_API_KEY": _KEY}
+_VALUES = {"YAMCPS_ARR_RADARR_URL": _URL, "YAMCPS_ARR_RADARR_API_KEY": _KEY}
 _MOVIE = {
     "id": 42,
     "tmdbId": 77,
@@ -165,7 +166,7 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.client = RadarrClient(
             _URL, SecretStr(_KEY), transport=httpx.MockTransport(self.respond)
         )
-        self.service = RadarrService(self.client, ConnectorSecrets("radarr", _VALUES).redact)
+        self.service = RadarrService(self.client, ConnectorSecrets("arr", _VALUES).redact)
 
     def respond(self, request):
         self.requests.append(request)
@@ -290,8 +291,8 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("unexpected", result[0])
 
     async def test_mcp_schema_annotations_skill_and_validation(self):
-        with patch("yamcps_radarr.RadarrClient", return_value=self.client):
-            server = create_server(["radarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.radarr.RadarrClient", return_value=self.client):
+            server = create_service_server(RadarrConnector, ["radarr"], secret_values=_VALUES)
         self.assertEqual(self.requests, [])
         async with Client(server) as client:
             tools = (await client.list_tools()).tools
@@ -300,21 +301,21 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn("api-key", repr(tool.input_schema))
                 self.assertEqual(
                     tool.annotations.read_only_hint,
-                    tool.name not in {"radarr_add_movie", "radarr_search_movies"},
+                    tool.name not in {"arr_radarr_add_movie", "arr_radarr_search_movies"},
                 )
             self.assertIn(
-                "radarr_add_movie",
-                (await client.read_resource("skill://radarr-manage/SKILL.md")).contents[0].text,
+                "arr_radarr_add_movie",
+                (await client.read_resource("skill://arr-radarr-manage/SKILL.md")).contents[0].text,
             )
-            result = await client.call_tool("radarr_system_status", {})
+            result = await client.call_tool("arr_radarr_system_status", {})
             self.assertEqual(result.structured_content, {"version": "5.0.0-test"})
             count = len(self.requests)
             for name, args in [
-                ("radarr_get_movie", {"movie_id": 0}),
-                ("radarr_queue", {"page_size": 101}),
-                ("radarr_search_movies", {"movie_ids": []}),
+                ("arr_radarr_get_movie", {"movie_id": 0}),
+                ("arr_radarr_queue", {"page_size": 101}),
+                ("arr_radarr_search_movies", {"movie_ids": []}),
                 (
-                    "radarr_add_movie",
+                    "arr_radarr_add_movie",
                     {
                         "tmdb_id": 77,
                         "quality_profile_id": 2,
@@ -327,11 +328,12 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue((await client.call_tool(name, args)).is_error)
             self.assertEqual(len(self.requests), count)
             result = await client.call_tool(
-                "radarr_add_movie", {"tmdb_id": 77, "quality_profile_id": 2, "root_folder_id": 3}
+                "arr_radarr_add_movie",
+                {"tmdb_id": 77, "quality_profile_id": 2, "root_folder_id": 3},
             )
             self.assertFalse(result.is_error)
             self.assertEqual(result.structured_content["id"], 55)
-            result = await client.call_tool("radarr_search_movies", {"movie_ids": [42]})
+            result = await client.call_tool("arr_radarr_search_movies", {"movie_ids": [42]})
             self.assertFalse(result.is_error)
             self.assertEqual(result.structured_content["status"], "queued")
 
@@ -342,38 +344,24 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 Path(directory) / "keys/master.yamcps-key",
             )
             with (
-                patch("yamcps_radarr.RadarrClient", return_value=self.client),
+                patch("yamcps_arr.radarr.RadarrClient", return_value=self.client),
                 patch("sys.stdin.isatty", return_value=True),
                 patch("yamcps.onboarding.getpass.getpass", side_effect=[_URL, _KEY]) as prompt,
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                server = create_server(["radarr"], vault=vault, interactive=True)
+                server = create_service_server(
+                    RadarrConnector, ["radarr"], vault=vault, interactive=True
+                )
             self.assertEqual(prompt.call_count, 2)
             self.assertEqual(self.requests, [])
             with (
-                patch("yamcps_radarr.RadarrClient", return_value=self.client),
+                patch("yamcps_arr.radarr.RadarrClient", return_value=self.client),
                 patch("yamcps.onboarding.getpass.getpass") as prompt,
             ):
-                create_server(["radarr"], vault=vault)
+                create_service_server(RadarrConnector, ["radarr"], vault=vault)
             prompt.assert_not_called()
             async with Client(server) as client:
-                self.assertFalse((await client.call_tool("radarr_system_status", {})).is_error)
-
-    async def test_sonarr_and_radarr_can_be_loaded_together(self):
-        values = {
-            **_VALUES,
-            "YAMCPS_SONARR_URL": "http://sonarr.example.test",
-            "YAMCPS_SONARR_API_KEY": "different-sonarr-key",
-        }
-        with patch("yamcps_radarr.RadarrClient", return_value=self.client):
-            server = create_server(["sonarr", "radarr"], secret_values=values)
-        async with Client(server) as client:
-            tools = (await client.list_tools()).tools
-            self.assertEqual(len(tools), 24)
-            self.assertEqual(len({tool.name for tool in tools}), 24)
-            self.assertEqual(len((await client.list_resources()).resources), 2)
-            self.assertFalse((await client.call_tool("radarr_system_status", {})).is_error)
-        self.assertEqual(self.requests[-1].headers["X-Api-Key"], _KEY)
+                self.assertFalse((await client.call_tool("arr_radarr_system_status", {})).is_error)
 
     async def test_mcp_auth_failure_does_not_expose_body(self):
         failing = RadarrClient(
@@ -381,25 +369,27 @@ class RadarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
             SecretStr(_KEY),
             transport=httpx.MockTransport(lambda request: httpx.Response(401, text=_KEY)),
         )
-        with patch("yamcps_radarr.RadarrClient", return_value=failing):
-            server = create_server(["radarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.radarr.RadarrClient", return_value=failing):
+            server = create_service_server(RadarrConnector, ["radarr"], secret_values=_VALUES)
         async with Client(server) as client:
-            result = await client.call_tool("radarr_system_status", {})
+            result = await client.call_tool("arr_radarr_system_status", {})
         self.assertTrue(result.is_error)
         self.assertIn("authentication failed", repr(result))
         self.assertNotIn(_KEY, repr(result))
 
     def test_registration_requires_configuration(self):
         plugin = RadarrConnector()
-        self.assertEqual([spec.name for spec in plugin.required_secrets()], ["url", "api-key"])
+        self.assertEqual(
+            [spec.name for spec in plugin.required_secrets()], ["radarr-url", "radarr-api-key"]
+        )
         with self.assertRaises(SecretError):
             plugin.register(MCPServer("test"))
         with self.assertRaises(SecretError):
-            plugin.configure(ConnectorSecrets("radarr", {}))
-        with self.assertRaisesRegex(SecretError, "YAMCPS_RADARR_API_KEY"):
+            plugin.configure(ConnectorSecrets("arr", {}))
+        with self.assertRaisesRegex(SecretError, "YAMCPS_ARR_RADARR_API_KEY"):
             plugin.configure(
                 ConnectorSecrets(
-                    "radarr", {"YAMCPS_RADARR_URL": _URL, "YAMCPS_SONARR_API_KEY": _KEY}
+                    "arr", {"YAMCPS_ARR_RADARR_URL": _URL, "YAMCPS_ARR_SONARR_API_KEY": _KEY}
                 )
             )
 

@@ -12,16 +12,17 @@ import httpx
 from mcp import Client
 from mcp.server import MCPServer
 from pydantic import SecretStr
+from support import create_service_server
 from yamcps import ConnectorSecrets, SecretError
-from yamcps.server import create_server
 from yamcps.vault import Vault
-from yamcps_prowlarr import ProwlarrConnector
-from yamcps_prowlarr.client import ProwlarrClient, ProwlarrError, validate_url
-from yamcps_prowlarr.service import ProwlarrService
+
+from yamcps_arr.prowlarr import ProwlarrConnector
+from yamcps_arr.prowlarr.client import ProwlarrClient, ProwlarrError, validate_url
+from yamcps_arr.prowlarr.service import ProwlarrService
 
 _KEY = "sentinel-prowlarr-key-93217"
 _URL = "https://prowlarr.example.test/indexers"
-_VALUES = {"YAMCPS_PROWLARR_URL": _URL, "YAMCPS_PROWLARR_API_KEY": _KEY}
+_VALUES = {"YAMCPS_ARR_PROWLARR_URL": _URL, "YAMCPS_ARR_PROWLARR_API_KEY": _KEY}
 _INDEXER = {"id": 1, "name": "Example Indexer", "enable": True}
 
 
@@ -197,7 +198,7 @@ class ProwlarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.client = ProwlarrClient(
             _URL, SecretStr(_KEY), transport=httpx.MockTransport(self.respond)
         )
-        self.service = ProwlarrService(self.client, ConnectorSecrets("prowlarr", _VALUES).redact)
+        self.service = ProwlarrService(self.client, ConnectorSecrets("arr", _VALUES).redact)
 
     def respond(self, request):
         self.requests.append(request)
@@ -326,8 +327,8 @@ class ProwlarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assert_safe(result)
 
     async def test_mcp_schema_annotations_skill_and_no_mutation_tools(self):
-        with patch("yamcps_prowlarr.ProwlarrClient", return_value=self.client):
-            server = create_server(["prowlarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.prowlarr.ProwlarrClient", return_value=self.client):
+            server = create_service_server(ProwlarrConnector, ["prowlarr"], secret_values=_VALUES)
         self.assertEqual(self.requests, [])
         async with Client(server) as client:
             tools = (await client.list_tools()).tools
@@ -342,21 +343,24 @@ class ProwlarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 )
             self.assertIn(
-                "prowlarr_search",
-                (await client.read_resource("skill://prowlarr-search/SKILL.md")).contents[0].text,
+                "arr_prowlarr_search",
+                (await client.read_resource("skill://arr-prowlarr-search/SKILL.md"))
+                .contents[0]
+                .text,
             )
             result = await client.call_tool(
-                "prowlarr_search", {"query": "Example", "indexer_ids": [1], "category_ids": [2000]}
+                "arr_prowlarr_search",
+                {"query": "Example", "indexer_ids": [1], "category_ids": [2000]},
             )
             self.assertFalse(result.is_error)
             self.assert_safe(result)
             count = len(self.requests)
             for name, args in [
-                ("prowlarr_get_indexer", {"indexer_id": 0}),
-                ("prowlarr_search", {"query": "Example", "limit": 101}),
-                ("prowlarr_search", {"query": "Example", "offset": -1}),
-                ("prowlarr_search", {"query": "Example", "indexer_ids": []}),
-                ("prowlarr_history", {"page": 0}),
+                ("arr_prowlarr_get_indexer", {"indexer_id": 0}),
+                ("arr_prowlarr_search", {"query": "Example", "limit": 101}),
+                ("arr_prowlarr_search", {"query": "Example", "offset": -1}),
+                ("arr_prowlarr_search", {"query": "Example", "indexer_ids": []}),
+                ("arr_prowlarr_history", {"page": 0}),
             ]:
                 with self.subTest(name=name, args=args):
                     self.assertTrue((await client.call_tool(name, args)).is_error)
@@ -369,39 +373,26 @@ class ProwlarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 Path(directory) / "keys/master.yamcps-key",
             )
             with (
-                patch("yamcps_prowlarr.ProwlarrClient", return_value=self.client),
+                patch("yamcps_arr.prowlarr.ProwlarrClient", return_value=self.client),
                 patch("sys.stdin.isatty", return_value=True),
                 patch("yamcps.onboarding.getpass.getpass", side_effect=[_URL, _KEY]) as prompt,
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                server = create_server(["prowlarr"], vault=vault, interactive=True)
+                server = create_service_server(
+                    ProwlarrConnector, ["prowlarr"], vault=vault, interactive=True
+                )
             self.assertEqual(prompt.call_count, 2)
             self.assertEqual(self.requests, [])
             with (
-                patch("yamcps_prowlarr.ProwlarrClient", return_value=self.client),
+                patch("yamcps_arr.prowlarr.ProwlarrClient", return_value=self.client),
                 patch("yamcps.onboarding.getpass.getpass") as prompt,
             ):
-                create_server(["prowlarr"], vault=vault)
+                create_service_server(ProwlarrConnector, ["prowlarr"], vault=vault)
             prompt.assert_not_called()
             async with Client(server) as client:
-                self.assertFalse((await client.call_tool("prowlarr_system_status", {})).is_error)
-
-    async def test_coexistence_with_sonarr_and_radarr(self):
-        values = {
-            **_VALUES,
-            "YAMCPS_SONARR_URL": "http://sonarr.example.test",
-            "YAMCPS_SONARR_API_KEY": "sonarr-only-key",
-            "YAMCPS_RADARR_URL": "http://radarr.example.test",
-            "YAMCPS_RADARR_API_KEY": "radarr-only-key",
-        }
-        with patch("yamcps_prowlarr.ProwlarrClient", return_value=self.client):
-            server = create_server(["sonarr", "radarr", "prowlarr"], secret_values=values)
-        async with Client(server) as client:
-            tools = (await client.list_tools()).tools
-            self.assertEqual(len(tools), 34)
-            self.assertEqual(len({tool.name for tool in tools}), 34)
-            self.assertEqual(len((await client.list_resources()).resources), 3)
-            self.assertFalse((await client.call_tool("prowlarr_system_status", {})).is_error)
+                self.assertFalse(
+                    (await client.call_tool("arr_prowlarr_system_status", {})).is_error
+                )
 
     async def test_auth_failure_is_safe_through_mcp(self):
         failing = ProwlarrClient(
@@ -409,23 +400,25 @@ class ProwlarrWorkflowTests(unittest.IsolatedAsyncioTestCase):
             SecretStr(_KEY),
             transport=httpx.MockTransport(lambda request: httpx.Response(401, text=_KEY)),
         )
-        with patch("yamcps_prowlarr.ProwlarrClient", return_value=failing):
-            server = create_server(["prowlarr"], secret_values=_VALUES)
+        with patch("yamcps_arr.prowlarr.ProwlarrClient", return_value=failing):
+            server = create_service_server(ProwlarrConnector, ["prowlarr"], secret_values=_VALUES)
         async with Client(server) as client:
-            result = await client.call_tool("prowlarr_system_status", {})
+            result = await client.call_tool("arr_prowlarr_system_status", {})
         self.assertTrue(result.is_error)
         self.assertIn("authentication failed", repr(result))
         self.assertNotIn(_KEY, repr(result))
 
     def test_configuration_required_and_scoped_to_prowlarr(self):
         plugin = ProwlarrConnector()
-        self.assertEqual([spec.name for spec in plugin.required_secrets()], ["url", "api-key"])
+        self.assertEqual(
+            [spec.name for spec in plugin.required_secrets()], ["prowlarr-url", "prowlarr-api-key"]
+        )
         with self.assertRaises(SecretError):
             plugin.register(MCPServer("test"))
-        with self.assertRaisesRegex(SecretError, "YAMCPS_PROWLARR_API_KEY"):
+        with self.assertRaisesRegex(SecretError, "YAMCPS_ARR_PROWLARR_API_KEY"):
             plugin.configure(
                 ConnectorSecrets(
-                    "prowlarr", {"YAMCPS_PROWLARR_URL": _URL, "YAMCPS_RADARR_API_KEY": _KEY}
+                    "arr", {"YAMCPS_ARR_PROWLARR_URL": _URL, "YAMCPS_ARR_RADARR_API_KEY": _KEY}
                 )
             )
 
