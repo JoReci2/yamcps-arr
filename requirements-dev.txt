@@ -1,0 +1,13 @@
+-e ./plugins/yamcps-sonarr
+-e ./plugins/yamcps-radarr
+-e ./plugins/yamcps-prowlarr
+pytest>=8
+pytest-asyncio>=1
+ruff
+mypy
+build
+hatchling
+editables
+coverage
+bandit
+radon
