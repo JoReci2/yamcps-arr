@@ -1,11 +1,13 @@
 # Contribuer à yamcps-arr
 
-Python ≥ 3.12. Installer d'abord un moteur yamcps compatible depuis sa distribution,
+Python ≥ 3.12 et yamcps ≥ 0.3.0, < 0.4 (SDK MCP ≥ 2.3, < 3).
+Installer d'abord un moteur yamcps compatible depuis sa distribution,
 son wheel ou, pour travailler sur les deux dépôts, `python -m pip install -e ../yamcps`.
 Depuis la racine de ce dépôt dans un environnement activé :
 
 ```sh
 python -m pip install -e '.[dev]'
+python -c "from importlib.metadata import version; print(version('yamcps'), version('mcp'))"
 ruff format --check src tests
 ruff check src tests
 mypy src
@@ -22,6 +24,17 @@ Le moteur est une dépendance Python installée. Sur poste hors ligne, fournir l
 wheels de toutes les dépendances, dont `hatchling` et `editables` pour le mode
 editable ; utiliser `--no-index --find-links /chemin/wheels` et construire avec
 `python -m build --no-isolation` après installation des outils.
+
+Pour reproduire la validation sur la version minimale prise en charge :
+
+```sh
+python -m pip install -e '.[dev]' 'yamcps==0.3.0' 'mcp==2.3.0'
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+Les tests d'intégration vérifient l'entry point `arr`, les 34 outils, les trois
+skills, le masquage partagé des secrets et les transports mémoire, stdio et HTTP
+local. Ils utilisent des valeurs fictives et des API simulées.
 
 Suivre PEP 8 (100 caractères), typer les interfaces publiques, documenter en anglais
 au format Google ; guides en français. Utiliser unittest pour les nouveaux tests,

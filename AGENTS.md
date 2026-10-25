@@ -72,7 +72,8 @@ Lors de la préparation de ces consignes, les chemins `docs/` et
 
 Le guide MCP extras-develop-plugin consulté cible yamcps 0.3.0,
 `mcp>=2.3,<3` et recommande `yamcps>=0.3.0,<0.4`.
-Le dépôt déclare actuellement `yamcps>=0.1`.
+Le dépôt déclare `yamcps>=0.3.0,<0.4` ; la version minimale doit rester couverte
+par les tests d’intégration avec le SDK MCP 2.3.0.
 
 Avant d’utiliser une nouvelle API, vérifier les versions et imports disponibles.
 Proposer explicitement les changements de compatibilité nécessaires.

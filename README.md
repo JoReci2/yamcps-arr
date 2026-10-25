@@ -9,7 +9,8 @@ Voir [la contribution](contributing.md) et [la migration](MIGRATION.md).
 
 ## Quickstart
 
-Python ≥ 3.12, moteur yamcps compatible et instances des trois services requis.
+Python ≥ 3.12, moteur yamcps ≥ 0.3.0 et < 0.4, et instances des trois services requis.
+La compatibilité est vérifiée avec yamcps 0.3.0 et le SDK MCP 2.3.0.
 Depuis la racine du dépôt :
 
 ```sh
