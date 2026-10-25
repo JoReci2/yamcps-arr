@@ -2,32 +2,36 @@
 
 ## Description
 
-Plugin unique pour Sonarr, Radarr et Prowlarr : bibliothèques, ajouts et recherches
-pour films et séries, consultation des indexeurs et recherche de releases.
-Les trois services sont configurés ensemble sous l’identifiant `arr`.
+Plugin unique pour Sonarr, Radarr, Prowlarr et Seerr : bibliothèques, ajouts et recherches
+pour films et séries, consultation des indexeurs, recherche de releases et gestion
+des demandes de médias. Les quatre services sont configurés ensemble sous l’identifiant `arr`.
 Voir [la contribution](contributing.md) et [la migration](MIGRATION.md).
 
 ## Quickstart
 
-Python ≥ 3.12, moteur yamcps ≥ 0.3.0 et < 0.4, et instances des trois services requis.
+Python ≥ 3.12, moteur yamcps ≥ 0.3.0 et < 0.4, et instances des quatre services requis.
 La compatibilité est vérifiée avec yamcps 0.3.0 et le SDK MCP 2.3.0.
 Depuis la racine du dépôt :
 
 ```sh
-python -m pip install -e .
+python -m pip install yamcps-arr
 yamcps connectors list
 yamcps secrets set --connector arr
 yamcps serve --connector arr
 ```
 
-L’assistant demande les URL et clés API des trois services dans le terminal et
+L’assistant demande les URL et clés API des quatre services dans le terminal et
 les conserve dans le coffre chiffré. Aucun appel réseau n’est fait au démarrage.
 Lire `skill://arr-sonarr-manage/SKILL.md`, `skill://arr-radarr-manage/SKILL.md`
-ou `skill://arr-prowlarr-search/SKILL.md` depuis le client MCP. Par exemple,
+ou `skill://arr-prowlarr-search/SKILL.md`, ainsi que
+`skill://arr-seerr-manage/SKILL.md` depuis le client MCP. Par exemple,
 appeler `arr_sonarr_system_status` pour vérifier Sonarr après configuration.
 Pour une installation existante, suivre [MIGRATION.md](MIGRATION.md).
-Les tests utilisent des API simulées. Guides : [Sonarr](docs/sonarr.md),
-[Radarr](docs/radarr.md), [Prowlarr](docs/prowlarr.md).
+Les tests utilisent des API simulées. Guides :
+[Sonarr](src/yamcps_arr/sonarr/skills/arr-sonarr-manage/SKILL.md),
+[Radarr](src/yamcps_arr/radarr/skills/arr-radarr-manage/SKILL.md),
+[Prowlarr](src/yamcps_arr/prowlarr/skills/arr-prowlarr-search/SKILL.md),
+[Seerr](docs/seerr.md).
 
 ## Outils
 
@@ -67,10 +71,20 @@ Les tests utilisent des API simulées. Guides : [Sonarr](docs/sonarr.md),
 | `arr_prowlarr_health` | Sources et sévérité des contrôles de santé |
 | `arr_prowlarr_statistics` | Compteurs et temps de réponse par indexeur |
 | `arr_prowlarr_applications` | Noms et niveau de synchronisation des applications liées |
+| `arr_seerr_system_status` | Version publique de Seerr, sans contrôle d’authentification |
+| `arr_seerr_search` | Recherche paginée de films et séries avec identifiants TMDB |
+| `arr_seerr_get_movie` | Détails, disponibilité et demandes d’un film par identifiant TMDB |
+| `arr_seerr_get_tv` | Détails, saisons et demandes d’une série par identifiant TMDB |
+| `arr_seerr_list_requests` | Demandes paginées, filtrables par statut, type et utilisateur |
+| `arr_seerr_get_request` | Détails d’une demande par identifiant Seerr |
+| `arr_seerr_create_request` | Création d’une demande, potentiellement approuvée automatiquement |
+| `arr_seerr_update_request_status` | Approbation ou refus d’une demande en attente |
 
 Sonarr/Radarr : ajout et recherche active peuvent déclencher des téléchargements.
 Prowlarr : recherche sans envoi au téléchargement, avec consommation possible des
 quotas des fournisseurs. Consulter les guides de chaque service.
+Seerr : création et approbation de demandes peuvent déclencher des téléchargements
+via Sonarr/Radarr. Les paramètres de service/profil/dossier restent ceux de Seerr.
 
 ## Skills
 
@@ -79,6 +93,7 @@ quotas des fournisseurs. Consulter les guides de chaque service.
 | [arr-sonarr-manage](src/yamcps_arr/sonarr/skills/arr-sonarr-manage/SKILL.md) | Browse Sonarr series, episodes and downloads, find and add series, and launch episode searches. |
 | [arr-radarr-manage](src/yamcps_arr/radarr/skills/arr-radarr-manage/SKILL.md) | Browse Radarr movies and downloads, find and add movies, and launch movie searches. |
 | [arr-prowlarr-search](src/yamcps_arr/prowlarr/skills/arr-prowlarr-search/SKILL.md) | Inspect Prowlarr indexers, categories, history and health, and search releases without downloading. |
+| [arr-seerr-manage](src/yamcps_arr/seerr/skills/arr-seerr-manage/SKILL.md) | Search Seerr movies and TV shows, inspect availability and requests, create requests, and approve or decline pending requests. |
 
 ## Variable de configuration
 
@@ -96,5 +111,7 @@ quotas des fournisseurs. Consulter les guides de chaque service.
 | `YAMCPS_ARR_RADARR_API_KEY` | `radarr-api-key` | Clé API de l’instance | Oui |
 | `YAMCPS_ARR_PROWLARR_URL` | `prowlarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui |
 | `YAMCPS_ARR_PROWLARR_API_KEY` | `prowlarr-api-key` | Clé API de l’instance | Oui |
+| `YAMCPS_ARR_SEERR_URL` | `seerr-url` | URL de l’instance Seerr sans identifiants ni suffixe API | Oui |
+| `YAMCPS_ARR_SEERR_API_KEY` | `seerr-api-key` | Clé API Seerr (Settings > General) | Oui |
 
-Les six champs sont requis par `arr` et configurés via le vault.
+Les huit champs sont requis par `arr` et configurés via le vault.

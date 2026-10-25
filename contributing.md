@@ -32,7 +32,7 @@ python -m pip install -e '.[dev]' 'yamcps==0.3.0' 'mcp==2.3.0'
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Les tests d'intégration vérifient l'entry point `arr`, les 34 outils, les trois
+Les tests d'intégration vérifient l'entry point `arr`, les 42 outils, les quatre
 skills, le masquage partagé des secrets et les transports mémoire, stdio et HTTP
 local. Ils utilisent des valeurs fictives et des API simulées.
 
