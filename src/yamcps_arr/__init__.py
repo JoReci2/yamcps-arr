@@ -4,7 +4,14 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from mcp.server import MCPServer
-from yamcps import ConnectorSecrets, SecretSpec
+from yamcps import (
+    ConfigError,
+    ConfigSpec,
+    ConnectorConfigs,
+    ConnectorSecrets,
+    SecretError,
+    SecretSpec,
+)
 
 from yamcps_arr.prowlarr import ProwlarrConnector
 from yamcps_arr.radarr import RadarrConnector
@@ -19,25 +26,81 @@ class ArrConnector:
 
     def __init__(self) -> None:
         """Create service adapters without network access."""
-        self._adapters = (
-            SonarrConnector(),
-            RadarrConnector(),
-            ProwlarrConnector(),
-            SeerrConnector(),
-        )
+        self._adapters: dict[
+            str, SonarrConnector | RadarrConnector | ProwlarrConnector | SeerrConnector
+        ] = {
+            "sonarr": SonarrConnector(),
+            "radarr": RadarrConnector(),
+            "prowlarr": ProwlarrConnector(),
+            "seerr": SeerrConnector(),
+        }
+        self._enabled: tuple[str, ...] = ()
+        self._secrets: ConnectorSecrets | None = None
+
+    def required_configs(self) -> list[ConfigSpec]:
+        """Declare one opt-in boolean setting per service."""
+        return [
+            ConfigSpec(f"enabled-{name}", f"Enable {name}: true or false", default="false")
+            for name in self._adapters
+        ]
+
+    def _selection(self, configs: ConnectorConfigs) -> tuple[str, ...]:
+        selected = []
+        for name in self._adapters:
+            value = configs.get(f"enabled-{name}")
+            normalized = "false" if value is None else value.strip().lower()
+            if normalized not in {"true", "false"}:
+                raise ConfigError(f"enabled-{name} must be true or false")
+            if normalized == "true":
+                selected.append(name)
+        if not selected:
+            raise ConfigError("Enable at least one ARR service with enabled-<service>=true")
+        return tuple(selected)
 
     def required_secrets(self) -> list[SecretSpec]:
-        """Return the eight service settings required in the ARR vault scope."""
-        return [spec for adapter in self._adapters for spec in adapter.required_secrets()]
+        """Return the complete eight-secret catalogue, including disabled services."""
+        return [spec for adapter in self._adapters.values() for spec in adapter.required_secrets()]
+
+    def required_secrets_for_configs(self, configs: ConnectorConfigs) -> list[SecretSpec]:
+        """Select secrets without depending on configuration injection.
+
+        Args:
+            configs: Resolved ARR settings supplied before secret collection.
+
+        Returns:
+            Only the selected services' secret declarations, in canonical order.
+        """
+        return [
+            spec
+            for name in self._selection(configs)
+            for spec in self._adapters[name].required_secrets()
+        ]
 
     def configure(self, secrets: ConnectorSecrets) -> None:
-        """Configure all services without contacting their instances.
+        """Retain shared credentials until service selection is injected.
 
         Args:
             secrets: ARR-scoped credentials shared for complete output redaction.
         """
-        for adapter in self._adapters:
-            adapter.configure(secrets)
+        self._secrets = secrets
+        self._enabled = ()
+
+    def configure_configs(self, configs: ConnectorConfigs) -> None:
+        """Configure selected adapters without validating disabled credentials.
+
+        Args:
+            configs: Explicit service selection resolved by yamcps.
+
+        Raises:
+            SecretError: Credentials were not injected or an active secret is missing.
+        """
+        self._enabled = ()
+        selected = self._selection(configs)
+        if self._secrets is None:
+            raise SecretError("Configure ARR credentials before selecting services")
+        for name in selected:
+            self._adapters[name].configure(self._secrets)
+        self._enabled = selected
 
     def register(self, server: MCPServer) -> None:
         """Register all service tools with their operation annotations.
@@ -45,9 +108,13 @@ class ArrConnector:
         Args:
             server: MCP server receiving the ARR tools.
         """
-        for adapter in self._adapters:
-            adapter.register(server)
+        if not self._enabled:
+            raise ConfigError(
+                "Enable and configure at least one service before registering ARR tools"
+            )
+        for name in self._enabled:
+            self._adapters[name].register(server)
 
     def skill_roots(self) -> Iterable[Path]:
-        """Return all bundled ARR workflow skill roots."""
-        return [root for adapter in self._adapters for root in adapter.skill_roots()]
+        """Return only enabled services' bundled workflow skill roots."""
+        return [root for name in self._enabled for root in self._adapters[name].skill_roots()]

@@ -3,6 +3,12 @@ name: arr-sonarr-manage
 description: Browse Sonarr series, episodes and downloads, find and add series, and launch episode searches.
 ---
 
+This service is optional and disabled by default. Before configuring secrets, run
+`yamcps configs set --connector arr --name enabled-sonarr --value true`. Only enabled
+services expose tools and skills. Restart the server after changing the selection;
+disabling a service preserves its stored credentials.
+
+
 Use the Sonarr tools for the user's selected instance. Credentials are configured
 in the terminal with `yamcps secrets set --connector arr`; never ask the user to
 paste API keys into the conversation or put credentials into tool arguments.
