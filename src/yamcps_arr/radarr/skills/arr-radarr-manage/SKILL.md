@@ -3,6 +3,12 @@ name: arr-radarr-manage
 description: Browse Radarr movies and downloads, find and add movies, and launch movie searches.
 ---
 
+This service is optional and disabled by default. Before configuring secrets, run
+`yamcps configs set --connector arr --name enabled-radarr --value true`. Only enabled
+services expose tools and skills. Restart the server after changing the selection;
+disabling a service preserves its stored credentials.
+
+
 Use Radarr tools for the configured instance. Credentials are configured in the
 terminal with `yamcps secrets set --connector arr`; never ask the user to paste
 API keys into the conversation or supply them as tool arguments.

@@ -3,9 +3,15 @@ name: arr-seerr-manage
 description: Search Seerr movies and TV shows, inspect availability and requests, create requests, and approve or decline pending requests.
 ---
 
+This service is optional and disabled by default. Before configuring secrets, run
+`yamcps configs set --connector arr --name enabled-seerr --value true`. Only enabled
+services expose tools and skills. Restart the server after changing the selection;
+disabling a service preserves its stored credentials.
+
+
 Configure credentials only in the terminal with
 `yamcps secrets set --connector arr`; never ask for API keys in the conversation
-or put them in tool arguments. Seerr is required alongside the other ARR services.
+or put them in tool arguments.
 
 Use `arr_seerr_system_status` for public version information. This endpoint does
 not validate authentication; use a bounded `arr_seerr_list_requests` call to check

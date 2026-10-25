@@ -3,6 +3,12 @@ name: arr-prowlarr-search
 description: Inspect Prowlarr indexers, categories, history and health, and search releases without downloading.
 ---
 
+This service is optional and disabled by default. Before configuring secrets, run
+`yamcps configs set --connector arr --name enabled-prowlarr --value true`. Only enabled
+services expose tools and skills. Restart the server after changing the selection;
+disabling a service preserves its stored credentials.
+
+
 Use `arr_prowlarr_system_status` to check connectivity. Configure credentials only
 in the terminal with `yamcps secrets set --connector arr`; never request API
 keys in the conversation or put them in tool arguments.

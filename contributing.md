@@ -1,6 +1,6 @@
 # Contribuer à yamcps-arr
 
-Python ≥ 3.12 et yamcps ≥ 0.3.0, < 0.4 (SDK MCP ≥ 2.3, < 3).
+Python ≥ 3.12 et yamcps ≥ 0.4.0, < 0.5 (SDK MCP ≥ 2.3, < 3).
 Installer d'abord un moteur yamcps compatible depuis sa distribution,
 son wheel ou, pour travailler sur les deux dépôts, `python -m pip install -e ../yamcps`.
 Depuis la racine de ce dépôt dans un environnement activé :
@@ -25,22 +25,32 @@ wheels de toutes les dépendances, dont `hatchling` et `editables` pour le mode
 editable ; utiliser `--no-index --find-links /chemin/wheels` et construire avec
 `python -m build --no-isolation` après installation des outils.
 
-Pour reproduire la validation sur la version minimale prise en charge :
+La version finale yamcps 0.4.0 n’a pas encore été testée. En attendant sa
+publication, valider dans un environnement temporaire avec la préversion, sans
+modifier la dépendance déclarée. Installer séparément les dépendances et outils :
 
 ```sh
-python -m pip install -e '.[dev]' 'yamcps==0.3.0' 'mcp==2.3.0'
+python -m venv .venv
+# Activer cet environnement avant les commandes suivantes.
+python -m pip install 'yamcps==0.4.0.dev1' 'mcp==2.3.0' 'httpx>=0.28,<1' pytest pytest-asyncio ruff mypy build hatchling hatch-vcs editables coverage bandit radon
+python -m pip install --no-deps --no-build-isolation -e .
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 Les tests d'intégration vérifient l'entry point `arr`, les 42 outils, les quatre
 skills, le masquage partagé des secrets et les transports mémoire, stdio et HTTP
-local. Ils utilisent des valeurs fictives et des API simulées.
+local. Ils vérifient les 15 combinaisons de services, les sélections invalides,
+les secrets conditionnels et leur conservation/réactivation. Ils utilisent des
+valeurs fictives et des API simulées. Aucun fichier utilisateur n’est nécessaire.
 
 Suivre PEP 8 (100 caractères), typer les interfaces publiques, documenter en anglais
 au format Google ; guides en français. Utiliser unittest pour les nouveaux tests,
 conserver les tests existants et simuler les API. Garder stdout pour MCP stdio,
 les secrets hors des logs, et aucun appel réseau à l'import ou à l'enregistrement.
 Tester une installation wheel hors du dépôt, sans PYTHONPATH vers ses sources.
+Avec la préversion, installer le wheel avec `--no-deps` après les dépendances
+ci-dessus. Le résolveur refuse normalement 0.4.0.dev1 pour `yamcps>=0.4.0,<0.5` ;
+ce contournement reste réservé aux tests locaux.
 Conserver une couverture >80 %, examiner Radon/Bandit et signaler les limites.
 Ne pas publier sur PyPI ni déclencher une release sans demande explicite.
 

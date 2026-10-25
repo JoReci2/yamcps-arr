@@ -4,24 +4,37 @@
 
 Plugin unique pour Sonarr, Radarr, Prowlarr et Seerr : bibliothèques, ajouts et recherches
 pour films et séries, consultation des indexeurs, recherche de releases et gestion
-des demandes de médias. Les quatre services sont configurés ensemble sous l’identifiant `arr`.
+des demandes de médias. Les services sont activés au choix sous l’identifiant unique `arr`.
 Voir [la contribution](contributing.md) et [la migration](MIGRATION.md).
 
 ## Quickstart
 
-Python ≥ 3.12, moteur yamcps ≥ 0.3.0 et < 0.4, et instances des quatre services requis.
-La compatibilité est vérifiée avec yamcps 0.3.0 et le SDK MCP 2.3.0.
+Python ≥ 3.12, moteur yamcps ≥ 0.4.0 et < 0.5, et instances des services sélectionnés.
+La validation actuelle utilise yamcps 0.4.0.dev1 et le SDK MCP 2.3.0 ;
+la version finale 0.4.0 n’a pas encore été testée. L’installation normale de cette
+version du plugin nécessite la publication de yamcps 0.4.0. Voir
+[contributing.md](contributing.md) pour tester avec la préversion.
 Depuis la racine du dépôt :
 
 ```sh
 python -m pip install yamcps-arr
 yamcps connectors list
+yamcps configs set --connector arr --name enabled-sonarr --value true
+yamcps configs set --connector arr --name enabled-seerr --value true
 yamcps secrets set --connector arr
 yamcps serve --connector arr
 ```
 
-L’assistant demande les URL et clés API des quatre services dans le terminal et
-les conserve dans le coffre chiffré. Aucun appel réseau n’est fait au démarrage.
+Activer chaque service souhaité avec `enabled-sonarr`, `enabled-radarr`,
+`enabled-prowlarr` ou `enabled-seerr`. Chaque paramètre vaut `false` par défaut ;
+au moins un doit valoir `true` pour démarrer. Seules les valeurs `true` et `false`
+sont acceptées (espaces et casse normalisés). Pour désactiver un service :
+`yamcps configs set --connector arr --name enabled-sonarr --value false`.
+L’assistant demande uniquement les URL et clés API des services activés et les
+conserve dans le coffre chiffré. Désactiver un service ne supprime pas ses secrets.
+Redémarrer le serveur et reconnecter le client après un changement de sélection.
+Seuls les outils et skills des services activés sont exposés, dans l’ordre
+Sonarr, Radarr, Prowlarr, Seerr. Aucun appel réseau n’est fait au démarrage.
 Lire `skill://arr-sonarr-manage/SKILL.md`, `skill://arr-radarr-manage/SKILL.md`
 ou `skill://arr-prowlarr-search/SKILL.md`, ainsi que
 `skill://arr-seerr-manage/SKILL.md` depuis le client MCP. Par exemple,
@@ -34,6 +47,8 @@ Les tests utilisent des API simulées. Guides :
 [Seerr](docs/seerr.md).
 
 ## Outils
+
+Catalogue complet ; seuls les outils des services activés sont exposés.
 
 | Outil | Description |
 | --- | --- |
@@ -88,6 +103,8 @@ via Sonarr/Radarr. Les paramètres de service/profil/dossier restent ceux de See
 
 ## Skills
 
+Seuls les skills des services activés sont disponibles depuis MCP.
+
 | Skill | Description |
 | --- | --- |
 | [arr-sonarr-manage](src/yamcps_arr/sonarr/skills/arr-sonarr-manage/SKILL.md) | Browse Sonarr series, episodes and downloads, find and add series, and launch episode searches. |
@@ -99,19 +116,24 @@ via Sonarr/Radarr. Les paramètres de service/profil/dossier restent ceux de See
 
 | Variable | Nom du champ | Description | Obligatoire | Valeur par défaut |
 | --- | --- | --- | --- | --- |
-| Aucune | — | — | — | — |
+| `YAMCPS_ARR_ENABLED_SONARR` | `enabled-sonarr` | Activer Sonarr (`true` ou `false`) | Non | `false` |
+| `YAMCPS_ARR_ENABLED_RADARR` | `enabled-radarr` | Activer Radarr (`true` ou `false`) | Non | `false` |
+| `YAMCPS_ARR_ENABLED_PROWLARR` | `enabled-prowlarr` | Activer Prowlarr (`true` ou `false`) | Non | `false` |
+| `YAMCPS_ARR_ENABLED_SEERR` | `enabled-seerr` | Activer Seerr (`true` ou `false`) | Non | `false` |
 
 ## Secret
 
 | Secret | Nom du champ | Description | Obligatoire |
 | --- | --- | --- | --- |
-| `YAMCPS_ARR_SONARR_URL` | `sonarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui |
-| `YAMCPS_ARR_SONARR_API_KEY` | `sonarr-api-key` | Clé API de l’instance | Oui |
-| `YAMCPS_ARR_RADARR_URL` | `radarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui |
-| `YAMCPS_ARR_RADARR_API_KEY` | `radarr-api-key` | Clé API de l’instance | Oui |
-| `YAMCPS_ARR_PROWLARR_URL` | `prowlarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui |
-| `YAMCPS_ARR_PROWLARR_API_KEY` | `prowlarr-api-key` | Clé API de l’instance | Oui |
-| `YAMCPS_ARR_SEERR_URL` | `seerr-url` | URL de l’instance Seerr sans identifiants ni suffixe API | Oui |
-| `YAMCPS_ARR_SEERR_API_KEY` | `seerr-api-key` | Clé API Seerr (Settings > General) | Oui |
+| `YAMCPS_ARR_SONARR_URL` | `sonarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui, si service activé |
+| `YAMCPS_ARR_SONARR_API_KEY` | `sonarr-api-key` | Clé API de l’instance | Oui, si service activé |
+| `YAMCPS_ARR_RADARR_URL` | `radarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui, si service activé |
+| `YAMCPS_ARR_RADARR_API_KEY` | `radarr-api-key` | Clé API de l’instance | Oui, si service activé |
+| `YAMCPS_ARR_PROWLARR_URL` | `prowlarr-url` | URL de l’instance sans identifiants ni suffixe API | Oui, si service activé |
+| `YAMCPS_ARR_PROWLARR_API_KEY` | `prowlarr-api-key` | Clé API de l’instance | Oui, si service activé |
+| `YAMCPS_ARR_SEERR_URL` | `seerr-url` | URL de l’instance Seerr sans identifiants ni suffixe API | Oui, si service activé |
+| `YAMCPS_ARR_SEERR_API_KEY` | `seerr-api-key` | Clé API Seerr (Settings > General) | Oui, si service activé |
 
-Les huit champs sont requis par `arr` et configurés via le vault.
+Chaque service activé nécessite son URL et sa clé API. Les champs des autres
+services sont conservés mais ne sont ni demandés ni validés. La sélection est
+en clair dans la configuration yamcps ; les secrets restent dans le vault.

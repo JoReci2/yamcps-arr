@@ -1,17 +1,22 @@
 # Seerr
 
 Seerr est intégré au connecteur `arr` avec Sonarr, Radarr et Prowlarr.
-Les quatre services sont obligatoires. Le client utilise l’API `/api/v1` et
+Chaque service est optionnel ; Seerr peut être activé seul. Le client utilise l’API `/api/v1` et
 l’en-tête `X-Api-Key`, avec un délai de lecture de 15 secondes, sans redirection
 ni nouvelle tentative automatique.
 
 ## Configuration
 
-Exécuter `yamcps secrets set --connector arr` dans un terminal et renseigner
+Sélectionner Seerr avec
+`yamcps configs set --connector arr --name enabled-seerr --value true`
+puis exécuter
+`yamcps secrets set --connector arr` dans un terminal et renseigner
 `seerr-url` et `seerr-api-key`. Utiliser l’URL de base sans `/api/v1` ; un préfixe
 de reverse proxy est accepté. La clé se trouve dans Settings > General de Seerr.
 Elle peut donner des droits administrateur : la conserver dans le coffre.
-Redémarrer le serveur après configuration.
+Redémarrer le serveur après configuration. Désactiver Seerr retire ses outils et
+son skill du catalogue MCP sans effacer ses secrets. Les serveurs Sonarr/Radarr
+configurés dans Seerr restent indépendants des outils ARR activés dans ce plugin.
 
 Pour une installation existante, consulter [MIGRATION.md](../MIGRATION.md).
 
