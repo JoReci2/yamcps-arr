@@ -20,11 +20,12 @@ from yamcps.vault import Vault
 from yamcps_arr import ArrConnector
 from yamcps_arr.prowlarr.client import ProwlarrClient
 from yamcps_arr.radarr.client import RadarrClient
+from yamcps_arr.seerr.client import SeerrClient
 from yamcps_arr.sonarr.client import SonarrClient
 
 _VALUES = {
     f"YAMCPS_ARR_{service.upper()}_{field}": value
-    for service in ("sonarr", "radarr", "prowlarr")
+    for service in ("sonarr", "radarr", "prowlarr", "seerr")
     for field, value in (
         ("URL", f"http://{service}.example.test"),
         ("API_KEY", f"test-{service}-token"),
@@ -44,7 +45,7 @@ class ArrTests(unittest.IsolatedAsyncioTestCase):
             {spec.name for spec in plugin.required_secrets()},
             {
                 f"{service}-{field}"
-                for service in ("sonarr", "radarr", "prowlarr")
+                for service in ("sonarr", "radarr", "prowlarr", "seerr")
                 for field in ("url", "api-key")
             },
         )
@@ -59,10 +60,15 @@ class ArrTests(unittest.IsolatedAsyncioTestCase):
     async def exercise(self, target):
         async with Client(target) as client:
             tools = (await client.list_tools()).tools
-            self.assertEqual(len(tools), 34)
-            self.assertEqual(len({tool.name for tool in tools}), 34)
+            self.assertEqual(len(tools), 42)
+            self.assertEqual(len({tool.name for tool in tools}), 42)
             self.assertTrue(all(tool.name.startswith("arr_") for tool in tools))
-            for skill in ("arr-sonarr-manage", "arr-radarr-manage", "arr-prowlarr-search"):
+            for skill in (
+                "arr-sonarr-manage",
+                "arr-radarr-manage",
+                "arr-prowlarr-search",
+                "arr-seerr-manage",
+            ):
                 result = await client.read_resource(f"skill://{skill}/SKILL.md")
                 self.assertIn(f"name: {skill}", result.contents[0].text)
             self.assertTrue(
@@ -87,11 +93,15 @@ class ArrTests(unittest.IsolatedAsyncioTestCase):
                 "yamcps_arr.prowlarr.ProwlarrClient",
                 side_effect=lambda url, key: ProwlarrClient(url, key, transport=transport),
             ),
+            patch(
+                "yamcps_arr.seerr.SeerrClient",
+                side_effect=lambda url, key: SeerrClient(url, key, transport=transport),
+            ),
         ):
             server = create_server(["arr"], secret_values=_VALUES)
         await self.exercise(server)
         async with Client(server) as client:
-            for service in ("sonarr", "radarr", "prowlarr"):
+            for service in ("sonarr", "radarr", "prowlarr", "seerr"):
                 result = await client.call_tool(f"arr_{service}_system_status", {})
                 self.assertFalse(result.is_error)
                 self.assertNotIn("test-radarr-token", repr(result))

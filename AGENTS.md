@@ -2,7 +2,7 @@
 
 ## Objectif et périmètre
 
-Maintenir le plugin yamcps unifié pour Sonarr, Radarr et Prowlarr :
+Maintenir le plugin yamcps unifié pour Sonarr, Radarr, Prowlarr et Seerr :
 consultation des bibliothèques, ajouts, recherches et inspection des indexeurs.
 
 Préserver :
@@ -21,6 +21,7 @@ une release sans demande explicite.
 - `src/yamcps_arr/sonarr/` : intégration Sonarr.
 - `src/yamcps_arr/radarr/` : intégration Radarr.
 - `src/yamcps_arr/prowlarr/` : intégration Prowlarr.
+- `src/yamcps_arr/seerr/` : intégration Seerr et demandes de médias.
 - Dans chaque intégration : enregistrement MCP dans `__init__.py`,
   client HTTP dans `client.py`, logique métier dans `service.py`.
 - `src/yamcps_arr/*/skills/` : guides embarqués exposés par MCP.
@@ -31,8 +32,8 @@ une release sans demande explicite.
 - `.github/workflows/` : publication et vérification des artefacts.
 
 Vérifier l’existence des fichiers référencés avant de s’y appuyer.
-Lors de la préparation de ces consignes, les chemins `docs/` et
-`MIGRATION.md` mentionnés dans le README étaient absents.
+[MIGRATION.md](MIGRATION.md) décrit l’ajout obligatoire de Seerr ;
+[docs/seerr.md](docs/seerr.md) documente ses opérations et leurs effets.
 
 ## Méthode de travail
 
@@ -97,7 +98,7 @@ Commande de diagnostic des versions :
 
 ## Secrets et données externes
 
-Les six paramètres sensibles des services sont configurés via le coffre :
+Les huit paramètres sensibles des services sont configurés via le coffre :
 
     yamcps secrets set --connector arr
 
@@ -137,6 +138,12 @@ Prowlarr :
 Les annotations MCP ne constituent pas une autorisation.
 Respecter la portée de la demande utilisateur avant toute opération métier.
 
+Seerr :
+- la création peut être automatiquement approuvée et déclencher des téléchargements ;
+- l’approbation et le refus modifient les demandes ;
+- distinguer les identifiants TMDB, les identifiants de demandes et ceux des utilisateurs ;
+- exclure des sorties les tokens, emails et objets utilisateur bruts.
+
 ## Skills embarqués
 
 - Retourner une racine par skill depuis `skill_roots()`.
@@ -155,6 +162,7 @@ Guides locaux :
 - [Sonarr](src/yamcps_arr/sonarr/skills/arr-sonarr-manage/SKILL.md)
 - [Radarr](src/yamcps_arr/radarr/skills/arr-radarr-manage/SKILL.md)
 - [Prowlarr](src/yamcps_arr/prowlarr/skills/arr-prowlarr-search/SKILL.md)
+- [Seerr](src/yamcps_arr/seerr/skills/arr-seerr-manage/SKILL.md)
 
 ## Utilisation des ressources MCP
 
@@ -169,6 +177,8 @@ Distinguer une capacité documentée, une ressource lisible et un outil disponib
 | arr / Sonarr | `arr-sonarr-manage` | Guider les opérations Sonarr | Skill local ou URI `skill://arr-sonarr-manage/SKILL.md` | Effets métier selon la demande utilisateur | Présent localement ; accès métier non vérifié |
 | arr / Radarr | `arr-radarr-manage` | Guider les opérations Radarr | Skill local ou URI `skill://arr-radarr-manage/SKILL.md` | Effets métier selon la demande utilisateur | Présent localement ; accès métier non vérifié |
 | arr / Prowlarr | `arr-prowlarr-search` | Guider les recherches et inspections | Skill local ou URI `skill://arr-prowlarr-search/SKILL.md` | Quotas fournisseurs et requêtes bornées | Présent localement ; accès métier non vérifié |
+
+| arr / Seerr | `arr-seerr-manage` | Rechercher des médias et gérer les demandes | Skill local ou URI `skill://arr-seerr-manage/SKILL.md` | Création et approbation peuvent déclencher des téléchargements | Présent localement ; accès métier non vérifié |
 
 Charger les guides pertinents avant leur application.
 Un skill ne confère pas de droits supplémentaires.

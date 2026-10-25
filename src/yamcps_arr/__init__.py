@@ -8,20 +8,26 @@ from yamcps import ConnectorSecrets, SecretSpec
 
 from yamcps_arr.prowlarr import ProwlarrConnector
 from yamcps_arr.radarr import RadarrConnector
+from yamcps_arr.seerr import SeerrConnector
 from yamcps_arr.sonarr import SonarrConnector
 
 
 class ArrConnector:
-    """Expose Sonarr, Radarr and Prowlarr through one connector."""
+    """Expose Sonarr, Radarr, Prowlarr and Seerr through one connector."""
 
     id = "arr"
 
     def __init__(self) -> None:
         """Create service adapters without network access."""
-        self._adapters = (SonarrConnector(), RadarrConnector(), ProwlarrConnector())
+        self._adapters = (
+            SonarrConnector(),
+            RadarrConnector(),
+            ProwlarrConnector(),
+            SeerrConnector(),
+        )
 
     def required_secrets(self) -> list[SecretSpec]:
-        """Return the six service settings required in the ARR vault scope."""
+        """Return the eight service settings required in the ARR vault scope."""
         return [spec for adapter in self._adapters for spec in adapter.required_secrets()]
 
     def configure(self, secrets: ConnectorSecrets) -> None:
